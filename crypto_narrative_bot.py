@@ -1,5 +1,3 @@
-# crypto_narrative_bot.py (Final Arbitrum Live Bot for Railway Deployment)
-
 import os
 import time
 import json
@@ -26,10 +24,31 @@ wallet = web3.toChecksumAddress(PUBLIC_ADDRESS)
 router = web3.toChecksumAddress(UNISWAP_ROUTER_ADDRESS)
 
 # Load ABIs
-with open("abis/UniswapV3Router.json") as f:
-    router_abi = json.load(f)
-with open("abis/ERC20.json") as f:
-    erc20_abi = json.load(f)
+def load_abi(file_path):
+    try:
+        with open(file_path, "r") as f:
+            abi = json.load(f)
+        # Check if ABI is a list
+        if isinstance(abi, list):
+            return abi
+        else:
+            print(f"Error: ABI in {file_path} is not a list.")
+            return None
+    except Exception as e:
+        print(f"Error loading ABI from {file_path}: {e}")
+        return None
+
+# Load the Uniswap Router ABI
+router_abi = load_abi("abis/UniswapV3Router.json")
+if router_abi is None:
+    print("Failed to load UniswapV3Router ABI. Exiting.")
+    exit()
+
+# Load the ERC20 ABI
+erc20_abi = load_abi("abis/ERC20.json")
+if erc20_abi is None:
+    print("Failed to load ERC20 ABI. Exiting.")
+    exit()
 
 # Constants
 START_CAPITAL = Decimal("50")
@@ -56,7 +75,6 @@ else:
     capital = START_CAPITAL
 
 # Get token price from CoinGecko
-
 def get_token_price(symbol):
     ids = {"ARB": "arbitrum", "MAGIC": "magic", "GMX": "gmx", "USDT": "tether"}
     token_id = ids[symbol]
@@ -64,8 +82,7 @@ def get_token_price(symbol):
     response = requests.get(url).json()
     return Decimal(str(response[token_id]["usd"]))
 
-# Telegram
-
+# Telegram Alerts
 def send_telegram_alert(msg):
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
@@ -74,7 +91,6 @@ def send_telegram_alert(msg):
         requests.post(url, data={"chat_id": chat_id, "text": msg})
 
 # Approve token
-
 def approve_token(token, spender, amount):
     contract = web3.eth.contract(address=token, abi=erc20_abi)
     nonce = web3.eth.get_transaction_count(wallet)
@@ -89,7 +105,6 @@ def approve_token(token, spender, amount):
     web3.eth.wait_for_transaction_receipt(tx_hash)
 
 # Execute real swap
-
 def execute_trade(token_symbol, amount_usdt):
     token = web3.toChecksumAddress(symbol_to_address[token_symbol])
     amount_in = int(amount_usdt * 1e6)  # USDT has 6 decimals
@@ -121,7 +136,6 @@ def execute_trade(token_symbol, amount_usdt):
     return receipt
 
 # Trade loop
-
 def run_daily_trade(capital):
     day = datetime.now().strftime('%Y-%m-%d')
     earned_today = Decimal("0")
