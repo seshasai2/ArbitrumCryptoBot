@@ -4,7 +4,7 @@ import json
 from decimal import Decimal
 from dotenv import load_dotenv
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
+
 import requests
 from datetime import datetime
 import random
@@ -19,7 +19,7 @@ PUBLIC_ADDRESS = os.getenv("PUBLIC_ADDRESS")
 UNISWAP_ROUTER_ADDRESS = os.getenv("UNISWAP_ROUTER_ADDRESS")
 
 web3 = Web3(Web3.HTTPProvider(ARBITRUM_RPC))
-web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+
 w3_eth = web3
 wallet = web3.toChecksumAddress(PUBLIC_ADDRESS)
 router = web3.toChecksumAddress(UNISWAP_ROUTER_ADDRESS)
