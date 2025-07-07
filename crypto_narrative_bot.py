@@ -8,7 +8,7 @@ import requests
 from datetime import datetime
 import random
 
-# Load env
+# Load environment variables
 load_dotenv(".env")
 
 # Setup Web3
@@ -51,8 +51,6 @@ START_CAPITAL = Decimal("50")
 TP_PERCENT = Decimal("0.25")
 SL_PERCENT = Decimal("0.05")
 DAILY_TARGET = Decimal("0.20")
-capital_file = "capital_live.json"
-base_symbol = "USDT"
 base_token = web3.to_checksum_address("0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9")  # USDT on Arbitrum
 router_contract = web3.eth.contract(address=router, abi=router_abi)
 
@@ -63,20 +61,28 @@ symbol_to_address = {
     "GMX": "0xfc5a1a6eb076a2c7ad06ed22c90d7e710e35ad0a"
 }
 
-# Load or initialize capital
-if os.path.exists(capital_file):
-    with open(capital_file, "r") as f:
-        capital = Decimal(json.load(f)["capital"])
-else:
-    capital = START_CAPITAL
-
 # Get token price from CoinGecko
-def get_token_price(symbol):
-    ids = {"ARB": "arbitrum", "MAGIC": "magic", "GMX": "gmx", "USDT": "tether"}
+def get_token_price(symbol, retries=3):
+    ids = {
+        "ARB": "arbitrum",
+        "MAGIC": "magic",
+        "GMX": "gmx",
+        "USDT": "tether"
+    }
     token_id = ids[symbol]
-    url = f"https://api.coingecko.com/api/v3/simple/price?ids={token_id}&vs_currencies=usd"
-    response = requests.get(url).json()
-    return Decimal(str(response[token_id]["usd"]))
+
+    for _ in range(retries):
+        try:
+            url = f"https://api.coingecko.com/api/v3/simple/price?ids={token_id}&vs_currencies=usd"
+            response = requests.get(url).json()
+            if token_id not in response:
+                raise ValueError(f"Token price for {symbol} not found: {response}")
+            return Decimal(str(response[token_id]["usd"]))
+        except Exception as e:
+            print(f"[Retrying] Error fetching {symbol} price: {e}")
+            time.sleep(2)
+
+    raise ValueError(f"Failed to get token price for {symbol} after retries.")
 
 # Telegram Alerts
 def send_telegram_alert(msg):
@@ -89,16 +95,16 @@ def send_telegram_alert(msg):
 # Approve token
 def approve_token(token, spender, amount):
     contract = web3.eth.contract(address=token, abi=erc20_abi)
-    nonce = web3.eth.getTransactionCount(wallet)
-    txn = contract.functions.approve(spender, amount).buildTransaction({
+    nonce = web3.eth.get_transaction_count(wallet)
+    txn = contract.functions.approve(spender, amount).build_transaction({
         'from': wallet,
         'nonce': nonce,
         'gas': 200000,
-        'gasPrice': web3.eth.gasPrice
+        'gasPrice': web3.eth.gas_price
     })
-    signed = web3.eth.account.signTransaction(txn, PRIVATE_KEY)
-    tx_hash = web3.eth.sendRawTransaction(signed.rawTransaction)
-    web3.eth.waitForTransactionReceipt(tx_hash)
+    signed = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
+    tx_hash = web3.eth.send_raw_transaction(signed.rawTransaction)
+    web3.eth.wait_for_transaction_receipt(tx_hash)
 
 # Execute real swap
 def execute_trade(token_symbol, amount_usdt):
@@ -117,21 +123,20 @@ def execute_trade(token_symbol, amount_usdt):
         'sqrtPriceLimitX96': 0
     }
 
-    tx = router_contract.functions.exactInputSingle(params).buildTransaction({
+    tx = router_contract.functions.exactInputSingle(params).build_transaction({
         'from': wallet,
-        'nonce': web3.eth.getTransactionCount(wallet),
+        'nonce': web3.eth.get_transaction_count(wallet),
         'gas': 400000,
-        'gasPrice': web3.eth.gasPrice,
+        'gasPrice': web3.eth.gas_price,
         'value': 0
     })
-    signed_tx = web3.eth.account.signTransaction(tx, PRIVATE_KEY)
-    tx_hash = web3.eth.sendRawTransaction(signed_tx.rawTransaction)
-    receipt = web3.eth.waitForTransactionReceipt(tx_hash)
+    signed_tx = web3.eth.account.sign_transaction(tx, PRIVATE_KEY)
+    tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
+    receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
     return receipt
 
 # Trade loop
 def run_daily_trade(capital):
-    day = datetime.now().strftime('%Y-%m-%d')
     earned_today = Decimal("0")
     trades_today = 0
     goal = capital * DAILY_TARGET
@@ -160,9 +165,9 @@ def run_daily_trade(capital):
 # Run
 if __name__ == "__main__":
     print("\n=== Running Final Arbitrum Bot ===")
+    capital = START_CAPITAL if os.getenv("RESET") == "1" else Decimal(os.getenv("CAPITAL", "50"))
     capital = run_daily_trade(capital)
 
-    with open(capital_file, "w") as f:
-        json.dump({"capital": str(capital)}, f)
-
+    # Output for Railway logs or GitHub Actions
+    print(f"::set-output name=capital::{capital:.2f}")
     print("\n✅ Done")
