@@ -20,6 +20,7 @@ UNISWAP_ROUTER_ADDRESS = os.getenv("UNISWAP_ROUTER_ADDRESS")
 
 web3 = Web3(Web3.HTTPProvider(ARBITRUM_RPC))
 web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+w3_eth = web3
 wallet = web3.toChecksumAddress(PUBLIC_ADDRESS)
 router = web3.toChecksumAddress(UNISWAP_ROUTER_ADDRESS)
 
@@ -28,7 +29,6 @@ def load_abi(file_path):
     try:
         with open(file_path, "r") as f:
             abi = json.load(f)
-        # Check if ABI is a list
         if isinstance(abi, list):
             return abi
         else:
@@ -38,13 +38,11 @@ def load_abi(file_path):
         print(f"Error loading ABI from {file_path}: {e}")
         return None
 
-# Load the Uniswap Router ABI
 router_abi = load_abi("abis/UniswapV3Router.json")
 if router_abi is None:
     print("Failed to load UniswapV3Router ABI. Exiting.")
     exit()
 
-# Load the ERC20 ABI
 erc20_abi = load_abi("abis/ERC20.json")
 if erc20_abi is None:
     print("Failed to load ERC20 ABI. Exiting.")
@@ -93,23 +91,21 @@ def send_telegram_alert(msg):
 # Approve token
 def approve_token(token, spender, amount):
     contract = web3.eth.contract(address=token, abi=erc20_abi)
-    nonce = web3.eth.get_transaction_count(wallet)
-    txn = contract.functions.approve(spender, amount).build_transaction({
+    nonce = web3.eth.getTransactionCount(wallet)
+    txn = contract.functions.approve(spender, amount).buildTransaction({
         'from': wallet,
         'nonce': nonce,
         'gas': 200000,
-        'gasPrice': web3.eth.gas_price
+        'gasPrice': web3.eth.gasPrice
     })
-    signed = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
-    tx_hash = web3.eth.send_raw_transaction(signed.rawTransaction)
-    web3.eth.wait_for_transaction_receipt(tx_hash)
+    signed = web3.eth.account.signTransaction(txn, PRIVATE_KEY)
+    tx_hash = web3.eth.sendRawTransaction(signed.rawTransaction)
+    web3.eth.waitForTransactionReceipt(tx_hash)
 
 # Execute real swap
 def execute_trade(token_symbol, amount_usdt):
     token = web3.toChecksumAddress(symbol_to_address[token_symbol])
-    amount_in = int(amount_usdt * 1e6)  # USDT has 6 decimals
-
-    # Approve USDT if needed
+    amount_in = int(amount_usdt * Decimal('1e6'))
     approve_token(base_token, router, amount_in)
 
     params = {
@@ -123,16 +119,16 @@ def execute_trade(token_symbol, amount_usdt):
         'sqrtPriceLimitX96': 0
     }
 
-    tx = router_contract.functions.exactInputSingle(params).build_transaction({
+    tx = router_contract.functions.exactInputSingle(params).buildTransaction({
         'from': wallet,
-        'nonce': web3.eth.get_transaction_count(wallet),
+        'nonce': web3.eth.getTransactionCount(wallet),
         'gas': 400000,
-        'gasPrice': web3.eth.gas_price,
+        'gasPrice': web3.eth.gasPrice,
         'value': 0
     })
-    signed_tx = web3.eth.account.sign_transaction(tx, PRIVATE_KEY)
-    tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
-    receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
+    signed_tx = web3.eth.account.signTransaction(tx, PRIVATE_KEY)
+    tx_hash = web3.eth.sendRawTransaction(signed_tx.rawTransaction)
+    receipt = web3.eth.waitForTransactionReceipt(tx_hash)
     return receipt
 
 # Trade loop
@@ -153,7 +149,6 @@ def run_daily_trade(capital):
         receipt = execute_trade(symbol, trade_amt)
         time.sleep(1)
 
-        # Simulate result
         result = random.choices(["TP", "SL"], weights=[0.65, 0.35])[0]
         profit = (tp - entry_price if result == "TP" else sl - entry_price) * trade_amt / entry_price
         capital += profit
@@ -169,7 +164,6 @@ if __name__ == "__main__":
     print("\n=== Running Final Arbitrum Bot ===")
     capital = run_daily_trade(capital)
 
-    # Save capital
     with open(capital_file, "w") as f:
         json.dump({"capital": str(capital)}, f)
 
