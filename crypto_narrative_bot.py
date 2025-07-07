@@ -19,8 +19,8 @@ UNISWAP_ROUTER_ADDRESS = os.getenv("UNISWAP_ROUTER_ADDRESS")
 
 web3 = Web3(Web3.HTTPProvider(ARBITRUM_RPC))
 w3_eth = web3
-wallet = web3.to_Checksum_Address(PUBLIC_ADDRESS)
-router = web3.to_Checksum_Address(UNISWAP_ROUTER_ADDRESS)
+wallet = web3.to_checksum_address(PUBLIC_ADDRESS)
+router = web3.to_checksum_address(UNISWAP_ROUTER_ADDRESS)
 
 # Load ABIs
 def load_abi(file_path):
@@ -53,7 +53,7 @@ SL_PERCENT = Decimal("0.05")
 DAILY_TARGET = Decimal("0.20")
 capital_file = "capital_live.json"
 base_symbol = "USDT"
-base_token = web3.to_Checksum_Address("0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9")  # USDT on Arbitrum
+base_token = web3.to_checksum_address("0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9")  # USDT on Arbitrum
 router_contract = web3.eth.contract(address=router, abi=router_abi)
 
 # Tokens
@@ -102,7 +102,7 @@ def approve_token(token, spender, amount):
 
 # Execute real swap
 def execute_trade(token_symbol, amount_usdt):
-    token = web3.to_Checksum_Address(symbol_to_address[token_symbol])
+    token = web3.to_checksum_address(symbol_to_address[token_symbol])
     amount_in = int(amount_usdt * Decimal('1e6'))
     approve_token(base_token, router, amount_in)
 
