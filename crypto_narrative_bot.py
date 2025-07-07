@@ -19,8 +19,8 @@ UNISWAP_ROUTER_ADDRESS = os.getenv("UNISWAP_ROUTER_ADDRESS")
 
 web3 = Web3(Web3.HTTPProvider(ARBITRUM_RPC))
 w3_eth = web3
-wallet = web3.to_checksum_address(PUBLIC_ADDRESS)
-router = web3.to_checksum_address(UNISWAP_ROUTER_ADDRESS)
+wallet = web3.toChecksumAddress(PUBLIC_ADDRESS)
+router = web3.toChecksumAddress(UNISWAP_ROUTER_ADDRESS)
 
 # Load ABIs
 def load_abi(file_path):
@@ -51,7 +51,7 @@ START_CAPITAL = Decimal("50")
 TP_PERCENT = Decimal("0.25")
 SL_PERCENT = Decimal("0.05")
 DAILY_TARGET = Decimal("0.20")
-base_token = web3.to_checksum_address("0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9")  # USDT on Arbitrum
+base_token = web3.toChecksumAddress("0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9")  # USDT on Arbitrum
 router_contract = web3.eth.contract(address=router, abi=router_abi)
 
 # Tokens
@@ -109,20 +109,21 @@ def send_telegram_alert(msg):
 # Approve token
 def approve_token(token, spender, amount):
     contract = web3.eth.contract(address=token, abi=erc20_abi)
-    nonce = web3.eth.get_transaction_count(wallet)
-    txn = contract.functions.approve(spender, amount).build_transaction({
+    nonce = web3.eth.getTransactionCount(wallet)
+    txn = contract.functions.approve(spender, amount).buildTransaction({
         'from': wallet,
         'nonce': nonce,
         'gas': 200000,
-        'gasPrice': web3.eth.gas_price
+        'gasPrice': web3.eth.gas_price()
+
     })
     signed = web3.eth.account.sign_transaction(txn, private_key=PRIVATE_KEY)
-    tx_hash = web3.eth.send_raw_transaction(signed.rawTransaction)
+    tx_hash = web3.eth.sendRawTransaction(signed.rawTransaction)
     web3.eth.wait_for_transaction_receipt(tx_hash)
 
 # Execute real swap
 def execute_trade(token_symbol, amount_usdt):
-    token = web3.to_checksum_address(symbol_to_address[token_symbol])
+    token = web3.toChecksumAddress(symbol_to_address[token_symbol])
     amount_in = int(amount_usdt * Decimal('1e6'))
     approve_token(base_token, router, amount_in)
 
@@ -139,13 +140,13 @@ def execute_trade(token_symbol, amount_usdt):
 
     tx = router_contract.functions.exactInputSingle(params).build_transaction({
         'from': wallet,
-        'nonce': web3.eth.get_transaction_count(wallet),
+        'nonce': web3.eth.getTransactionCount(wallet),
         'gas': 400000,
-        'gasPrice': web3.eth.gas_price,
+        'gasPrice': web3.eth.gas_price(),
         'value': 0
     })
     signed_tx = web3.eth.account.sign_transaction(tx, PRIVATE_KEY)
-    tx_hash = web3.eth.send_raw_transaction(signed_tx.rawTransaction)
+    tx_hash = web3.eth.sendRawTransaction(signed.rawTransaction)
     receipt = web3.eth.wait_for_transaction_receipt(tx_hash)
     return receipt
 
