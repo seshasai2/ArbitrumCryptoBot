@@ -69,20 +69,34 @@ def get_token_price(symbol, retries=3):
         "GMX": "gmx",
         "USDT": "tether"
     }
-    token_id = ids[symbol]
+    token_id = ids.get(symbol)
+    if not token_id:
+        raise ValueError(f"Symbol {symbol} not supported in price fetch.")
 
-    for _ in range(retries):
+    for attempt in range(retries):
         try:
             url = f"https://api.coingecko.com/api/v3/simple/price?ids={token_id}&vs_currencies=usd"
-            response = requests.get(url).json()
+            response = requests.get(url, timeout=5).json()
+
             if token_id not in response:
-                raise ValueError(f"Token price for {symbol} not found: {response}")
+                print(f"[{symbol}] Missing token data on attempt {attempt + 1}: {response}")
+                time.sleep(2)
+                continue
+
             return Decimal(str(response[token_id]["usd"]))
+
         except Exception as e:
-            print(f"[Retrying] Error fetching {symbol} price: {e}")
+            print(f"[{symbol}] CoinGecko fetch error: {e}")
             time.sleep(2)
 
-    raise ValueError(f"Failed to get token price for {symbol} after retries.")
+    fallback_prices = {
+        "ARB": Decimal("0.75"),
+        "MAGIC": Decimal("0.45"),
+        "GMX": Decimal("30"),
+        "USDT": Decimal("1")
+    }
+    print(f"[{symbol}] Falling back to static price: {fallback_prices[symbol]}")
+    return fallback_prices[symbol]
 
 # Telegram Alerts
 def send_telegram_alert(msg):
@@ -144,7 +158,11 @@ def run_daily_trade(capital):
     while earned_today < goal and trades_today < 5:
         symbol = random.choice(list(symbol_to_address.keys()))
         trade_amt = min(capital * Decimal("0.2"), capital)
-        entry_price = get_token_price(symbol)
+        try:
+            entry_price = get_token_price(symbol)
+        except ValueError:
+            continue  # Skip token if price fetch fails
+
         tp = entry_price * (1 + TP_PERCENT)
         sl = entry_price * (1 - SL_PERCENT)
 
